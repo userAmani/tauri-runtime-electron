@@ -1,5 +1,3 @@
-//! Acquire and brand Electron at build time; launching only reads packaged files.
-
 mod build_support;
 
 use std::env;
@@ -16,7 +14,7 @@ fn prepare() -> Result<(), String> {
   for key in ["CARGO_TARGET_DIR", "INIT_CWD", "PWD", "TAURI_CONFIG"] {
     println!("cargo:rerun-if-env-changed={key}");
   }
-  let mut builder = electron_rs::ElectronBuilder::new(electron_rs::DEFAULT_VERSION);
+  let mut builder = electron_rs::ElectronBuilder::new(electron_rs::DEFAULT_VERSION).pe(true);
   let directory = builder.directory().map_err(|error| error.to_string())?;
   let target_root = directory.parent().and_then(|path| path.parent()).ok_or("Electron output has no Cargo target root")?;
   let output_root = directory.parent().ok_or("Electron output has no parent")?;

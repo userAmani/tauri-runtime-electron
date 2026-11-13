@@ -89,24 +89,18 @@ thread_local! {
   static APP_DETAILS: RefCell<Option<rpc::window::AppDetails>> = const { RefCell::new(None) };
 }
 
-/// Set the Windows taskbar identity used by windows created on this thread.
-///
-/// Windows pins a running window to the executable that owns it and, without a
-/// relaunch command, starts that executable with no arguments. Shell windows live
-/// in the bundled Electron process, so such a pin reopens the stock Electron app
-/// instead of this application. Register the application's own entry point here
-/// before building the app to make Windows relaunch it instead.
-///
-/// Applies to every window created afterwards, because the details travel with
-/// each window creation payload.
+/// 窗口由 Electron 进程持有，任务栏的重启目标和图标必须显式指向主程序。
 pub fn set_app_details(
   app_id: impl Into<String>,
   relaunch_command: impl Into<String>,
   relaunch_display_name: impl Into<String>,
+  app_icon_path: impl Into<String>,
 ) {
   APP_DETAILS.with(|details| {
     *details.borrow_mut() = Some(rpc::window::AppDetails {
       app_id: app_id.into(),
+      app_icon_path: Some(app_icon_path.into()),
+      app_icon_index: Some(0),
       relaunch_command: Some(relaunch_command.into()),
       relaunch_display_name: Some(relaunch_display_name.into()),
     });
@@ -3238,12 +3232,25 @@ mod tests {
     let builder = crate::window_builder::ElectronWindowBuilder::with_config(&config);
     assert!(window_create_payload(&builder, None, 7).unwrap().app_details.is_none());
 
-    set_app_details("dsh-tauri", "\"C:\\App\\app.exe\"", "DSH Tauri");
-    let payload = window_create_payload(&builder, None, 8).unwrap();
-    let details = payload.app_details.expect("registered app details must be sent");
-    assert_eq!(details.app_id, "dsh-tauri");
-    assert_eq!(details.relaunch_command.as_deref(), Some("\"C:\\App\\app.exe\""));
-    assert_eq!(details.relaunch_display_name.as_deref(), Some("DSH Tauri"));
+    set_app_details(
+      "com.shuiwujia.waterbuddy",
+      "\"C:\\Program Files\\水务加\\WaterPlusAI.exe\"",
+      "WaterPlusAI",
+      "C:\\Program Files\\水务加\\WaterPlusAI.exe",
+    );
+    for serial in [8, 9] {
+      let payload = window_create_payload(&builder, None, serial).unwrap();
+      assert_eq!(
+        serde_json::to_value(payload).unwrap()["appDetails"],
+        serde_json::json!({
+          "appId": "com.shuiwujia.waterbuddy",
+          "appIconPath": "C:\\Program Files\\水务加\\WaterPlusAI.exe",
+          "appIconIndex": 0,
+          "relaunchCommand": "\"C:\\Program Files\\水务加\\WaterPlusAI.exe\"",
+          "relaunchDisplayName": "WaterPlusAI",
+        })
+      );
+    }
     assert!(std::thread::spawn(|| app_details().is_none()).join().unwrap());
   }
 
